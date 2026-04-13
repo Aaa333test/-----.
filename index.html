@@ -1,94 +1,110 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <title>BaaS</title>
-    <style>
-        body { font-family: 'Inter', sans-serif; background: #f4f7f6; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        .container { width: 100%; max-width: 500px; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
-        button#mainBtn { background: #007bff; color: white; border: none; padding: 12px; border-radius: 6px; width: 100%; font-weight: 600; cursor: pointer; transition: 0.3s; }
-        .post { background: #fff; border: 1px solid #eaeaea; padding: 15px; margin-top: 15px; border-radius: 8px; width: 100%; max-width: 500px; position: relative; }
-        .like-btn { cursor: pointer; border: none; background: #f8f9fa; padding: 5px 12px; border-radius: 20px; font-size: 14px; transition: 0.2s; }
-        .like-btn:hover { background: #e2e6ea; }
-        .time { font-size: 11px; color: #999; float: right; }
-    </style>
+  <meta charset="UTF-8">
+  <title>Private Cloud Chat</title>
+  <style>
+    body { font-family: Arial; background:#f2f2f2; }
+    .container { width:400px; margin:50px auto; background:#fff; padding:20px; border-radius:10px; }
+    .chat-box { height:300px; overflow-y:auto; border:1px solid #ccc; padding:10px; margin-bottom:10px; }
+    .msg { margin:5px 0; }
+    .me { text-align:right; color:blue; }
+    .other { text-align:left; color:gray; }
+    button { padding:8px 12px; }
+  </style>
 </head>
 <body>
 
-    <div class="container">
-        <h3>Панель управления данными</h3>
-        <input type="text" id="name" placeholder="Имя профиля">
-        <input type="email" id="email" placeholder="Рабочий Email">
-        <button id="mainBtn">Опубликовать в облако</button>
-    </div>
+<div class="container">
+  <h3>Private Cloud Chat</h3>
 
-    <div id="feed" style="width: 100%; max-width: 500px;"></div>
+  <div id="user"></div>
+  <button onclick="login()">Войти через Google</button>
+  <button onclick="logout()">Выйти</button>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-        import {
-            getFirestore, collection, addDoc, query, orderBy, onSnapshot,
-            serverTimestamp, updateDoc, doc, increment
-        } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+  <hr>
 
-        // КОНФИГУРАЦИЯ
-       const firebaseConfig = {
-  apiKey: "AIzaSyDrQxbUvscJpNc1LJs4XcN_xX22f_tKZs4",
-  authDomain: "aaa333-98528.firebaseapp.com",
-  projectId: "aaa333-98528",
-  storageBucket: "aaa333-98528.firebasestorage.app",
-  messagingSenderId: "593705577357",
-  appId: "1:593705577357:web:a4c33f6b7fe85696b0ebc4",
-  measurementId: "G-M78HTNCT29"
-};
+  <div class="chat-box" id="chat"></div>
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+  <input id="message" placeholder="Ваше сообщение..." style="width:75%">
+  <button onclick="send()">➤</button>
+</div>
 
-        // МЕТОД: АТОМАРНОЕ ОБНОВЛЕНИЕ (LIKES)
-        window.processLike = async (id) => {
-            const docRef = doc(db, "requests", id);
-            try {
-                await updateDoc(docRef, { likes: increment(1) });
-            } catch (e) { console.error("Validation Error:", e.message); }
-        };
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"></script>
 
-        // МЕТОД: ЗАПИСЬ С ВАЛИДАЦИЕЙ
-        document.getElementById('mainBtn').onclick = async () => {
-            const btn = document.getElementById('mainBtn');
-            btn.disabled = true;
-            try {
-                await addDoc(collection(db, "requests"), {
-                    name: document.getElementById('name').value,
-                    email: document.getElementById('email').value,
-                    likes: 0,
-                    timestamp: serverTimestamp()
-                });
-                document.getElementById('email').value = "";
-            } catch (e) { alert("Ошибка безопасности: Данные отклонены сервером."); }
-            btn.disabled = false;
-        };
+<script>
+  const firebaseConfig = {
+    apiKey: "ТВОЙ_API_KEY",
+    authDomain: "ТВОЙ_PROJECT.firebaseapp.com",
+    projectId: "ТВОЙ_PROJECT_ID",
+  };
 
+  const app = firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
 
-        // МЕТОД: REAL-TIME СИНХРОНИЗАЦИЯ
+  let currentUser = null;
 
-        const q = query(collection(db, "requests"), orderBy("timestamp", "desc"));
-        onSnapshot(q, (snapshot) => {
-            const feed = document.getElementById('feed');
-            feed.innerHTML = "";
-            snapshot.forEach((doc) => {
-                const data = doc.data();
-                feed.innerHTML += `
-                    <div class="post">
-                        <span class="time">${data.timestamp?.toDate().toLocaleTimeString() || '...'}</span>
-                        <b>${data.name}</b>
-                        <p style="margin: 5px 0;">${data.email}</p>
-                        <button class="like-btn" onclick="processLike('${doc.id}')">👍 ${data.likes || 0}</button>
-                    </div>
-                `;
-            });
-        });
-    </script>
+  // Вход через Google
+  function login() {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider);
+  }
+
+  // Выход
+  function logout() {
+    auth.signOut();
+  }
+
+  // Состояние пользователя
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      currentUser = user;
+      document.getElementById("user").innerHTML =
+        `👤 ${user.displayName}`;
+    } else {
+      document.getElementById("user").innerHTML = "Не авторизован";
+    }
+  });
+
+  // Отправка сообщения
+  function send() {
+    const text = document.getElementById("message").value;
+    if (!text) return;
+
+    db.collection("messages").add({
+      text: text,
+      user: currentUser.displayName,
+      uid: currentUser.uid,
+      time: Date.now()
+    });
+
+    document.getElementById("message").value = "";
+  }
+
+  // Получение сообщений (реалтайм)
+  db.collection("messages")
+    .orderBy("time")
+    .onSnapshot(snapshot => {
+      const chat = document.getElementById("chat");
+      chat.innerHTML = "";
+
+      snapshot.forEach(doc => {
+        const msg = doc.data();
+        const div = document.createElement("div");
+
+        div.className = "msg " + (msg.uid === currentUser?.uid ? "me" : "other");
+        div.textContent = msg.text;
+
+        chat.appendChild(div);
+      });
+
+      chat.scrollTop = chat.scrollHeight;
+    });
+</script>
+
 </body>
 </html>
