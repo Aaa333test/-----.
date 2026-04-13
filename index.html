@@ -27,6 +27,13 @@ h2 { text-align:center; }
   margin-bottom:10px;
 }
 
+.user {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+}
+
 .chat {
   height:300px;
   border:1px solid #ddd;
@@ -37,7 +44,7 @@ h2 { text-align:center; }
 }
 
 .msg {
-  margin:5px 0;
+  margin:8px 0;
   padding:8px 12px;
   border-radius:10px;
   max-width:70%;
@@ -89,7 +96,7 @@ button {
     <button class="logout" id="logoutBtn">Выйти</button>
   </div>
 
-  <div id="user"></div>
+  <div id="user" class="user"></div>
 
   <div class="chat" id="chat"></div>
 
@@ -109,7 +116,7 @@ import {
   getFirestore, collection, addDoc, query, orderBy, onSnapshot 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// 🔥 ВСТАВЬ СВОЙ firebaseConfig
+// 🔥 ВСТАВЬ СЮДА СВОИ ДАННЫЕ
 const firebaseConfig = {
   apiKey: "AIzaSyDrQxbUvscJpNc1LJs4XcN_xX22f_tKZs4",
   authDomain: "aaa333-98528.firebaseapp.com",
@@ -120,58 +127,68 @@ const firebaseConfig = {
   measurementId: "G-M78HTNCT29"
 };
 
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
 let currentUser = null;
 
-// 🔑 LOGIN
+// 🔑 Вход
 document.getElementById("loginBtn").onclick = async () => {
   const provider = new GoogleAuthProvider();
   await signInWithPopup(auth, provider);
 };
 
-// 🚪 LOGOUT
+// 🚪 Выход
 document.getElementById("logoutBtn").onclick = () => {
   signOut(auth);
 };
 
-// 👤 USER STATE
+// 👤 Пользователь
 onAuthStateChanged(auth, (user) => {
+  const userDiv = document.getElementById("user");
+
   if (user) {
     currentUser = user;
-    document.getElementById("user").innerHTML =
-      "👤 " + user.displayName;
+
+    userDiv.innerHTML = `
+      <img src="${user.photoURL}" width="35" style="border-radius:50%">
+      <b>${user.displayName}</b>
+    `;
   } else {
     currentUser = null;
-    document.getElementById("user").innerHTML =
-      "Не авторизован";
+    userDiv.innerHTML = "Не авторизован";
   }
 });
 
-// ✉️ SEND MESSAGE
+// ✉️ Отправка
 document.getElementById("sendBtn").onclick = async () => {
-  const text = document.getElementById("message").value;
+  try {
+    const text = document.getElementById("message").value.trim();
 
-  if (!currentUser) {
-    alert("Сначала войди!");
-    return;
+    if (!currentUser) {
+      alert("Сначала войди!");
+      return;
+    }
+
+    if (!text) return;
+
+    await addDoc(collection(db, "messages"), {
+      text: text,
+      uid: currentUser.uid,
+      name: currentUser.displayName,
+      time: Date.now()
+    });
+
+    document.getElementById("message").value = "";
+
+  } catch (e) {
+    alert("Ошибка: " + e.message);
   }
-
-  if (!text) return;
-
-  await addDoc(collection(db, "messages"), {
-    text: text,
-    uid: currentUser.uid,
-    name: currentUser.displayName,
-    time: Date.now()
-  });
-
-  document.getElementById("message").value = "";
 };
 
-// 📡 REALTIME CHAT
+// 📡 Чат
 const q = query(collection(db, "messages"), orderBy("time"));
 
 onSnapshot(q, (snapshot) => {
@@ -182,17 +199,22 @@ onSnapshot(q, (snapshot) => {
     const msg = doc.data();
 
     const div = document.createElement("div");
-    div.className = "msg " + 
-      (msg.uid === currentUser?.uid ? "me" : "other");
+    const isMe = msg.uid === currentUser?.uid;
 
-    div.textContent = msg.text;
+    div.className = "msg " + (isMe ? "me" : "other");
+
+    div.innerHTML = `
+      <div style="font-size:12px;opacity:0.7;">
+        ${isMe ? "Вы" : msg.name}
+      </div>
+      <div>${msg.text}</div>
+    `;
 
     chat.appendChild(div);
   });
 
   chat.scrollTop = chat.scrollHeight;
 });
-
 </script>
 
 </body>
