@@ -2,24 +2,51 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>Private Cloud Chat</title>
+<title>Private Chat Pro</title>
 
 <style>
-body {
-  font-family: Arial;
-  background:#eef1f5;
+body { font-family: Arial; background:#eef1f5; }
+
+.app {
+  width: 900px;
+  margin: 30px auto;
+  display: flex;
+  gap: 15px;
 }
 
-.container {
-  width: 420px;
-  margin: 40px auto;
+/* LEFT USERS */
+.users {
+  width: 250px;
   background:white;
-  border-radius:12px;
-  padding:20px;
-  box-shadow:0 5px 20px rgba(0,0,0,0.1);
+  border-radius:10px;
+  padding:10px;
+  height:500px;
+  overflow-y:auto;
 }
 
-h2 { text-align:center; }
+.user-item {
+  padding:8px;
+  border-radius:8px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.user-item:hover { background:#f0f0f0; }
+
+.online { color:green; }
+.offline { color:gray; }
+
+/* CHAT */
+.chat-box {
+  flex:1;
+  background:white;
+  border-radius:10px;
+  padding:15px;
+  display:flex;
+  flex-direction:column;
+}
 
 .top {
   display:flex;
@@ -27,37 +54,28 @@ h2 { text-align:center; }
   margin-bottom:10px;
 }
 
-.user {
-  display:flex;
-  align-items:center;
-  gap:10px;
-  margin-bottom:10px;
-}
-
 .chat {
-  height:300px;
+  flex:1;
+  overflow-y:auto;
   border:1px solid #ddd;
   border-radius:8px;
   padding:10px;
-  overflow-y:auto;
   background:#fafafa;
 }
 
 .msg {
-  margin:8px 0;
-  padding:8px 12px;
-  border-radius:10px;
+  margin:10px 0;
+  padding:8px;
+  border-radius:8px;
   max-width:70%;
 }
 
-.me {
-  background:#007bff;
-  color:white;
-  margin-left:auto;
-}
+.me { background:#007bff; color:white; margin-left:auto; }
+.other { background:#e4e6eb; }
 
-.other {
-  background:#e4e6eb;
+.reactions span {
+  cursor:pointer;
+  margin-right:5px;
 }
 
 .input {
@@ -81,140 +99,216 @@ button {
 }
 
 .login { background:#4285F4; color:white; }
-.logout { background:#999; color:white; }
 .send { background:#28a745; color:white; }
 </style>
 </head>
 
 <body>
 
-<div class="container">
-  <h2>💬 Private Chat</h2>
+<div class="app">
 
+<!-- USERS -->
+<div class="users" id="users"></div>
+
+<!-- CHAT -->
+<div class="chat-box">
   <div class="top">
     <button class="login" id="loginBtn">Войти</button>
-    <button class="logout" id="logoutBtn">Выйти</button>
+    <button id="logoutBtn">Выйти</button>
   </div>
 
-  <div id="user" class="user"></div>
+  <div id="currentUser"></div>
+  <h4 id="chatWith">Выберите пользователя</h4>
 
   <div class="chat" id="chat"></div>
 
   <div class="input">
-    <input id="message" placeholder="Написать сообщение...">
+    <input id="message" placeholder="Сообщение...">
     <button class="send" id="sendBtn">➤</button>
   </div>
 </div>
 
+</div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { 
-  getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged 
+import {
+  getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-import { 
-  getFirestore, collection, addDoc, query, orderBy, onSnapshot 
+import {
+  getFirestore, collection, addDoc, doc, setDoc, getDoc,
+  onSnapshot, query, orderBy, updateDoc, increment
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// 🔥 ВСТАВЬ СЮДА СВОИ ДАННЫЕ
 const firebaseConfig = {
-  apiKey: "AIzaSyDrQxbUvscJpNc1LJs4XcN_xX22f_tKZs4",
-  authDomain: "aaa333-98528.firebaseapp.com",
-  projectId: "aaa333-98528",
-  storageBucket: "aaa333-98528.firebasestorage.app",
-  messagingSenderId: "593705577357",
-  appId: "1:593705577357:web:a4c33f6b7fe85696b0ebc4",
-  measurementId: "G-M78HTNCT29"
+  apiKey: "ТВОЙ_API_KEY",
+  authDomain: "ТВОЙ_PROJECT.firebaseapp.com",
+  projectId: "ТВОЙ_PROJECT_ID",
 };
-
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
 let currentUser = null;
+let currentChat = null;
 
-// 🔑 Вход
-document.getElementById("loginBtn").onclick = async () => {
+// LOGIN
+loginBtn.onclick = async () => {
   const provider = new GoogleAuthProvider();
   await signInWithPopup(auth, provider);
 };
 
-// 🚪 Выход
-document.getElementById("logoutBtn").onclick = () => {
-  signOut(auth);
-};
+// LOGOUT
+logoutBtn.onclick = () => signOut(auth);
 
-// 👤 Пользователь
-onAuthStateChanged(auth, (user) => {
-  const userDiv = document.getElementById("user");
-
+// USER STATE
+onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
 
-    userDiv.innerHTML = `
-      <img src="${user.photoURL}" width="35" style="border-radius:50%">
-      <b>${user.displayName}</b>
-    `;
+    // сохранить пользователя
+    await setDoc(doc(db, "users", user.uid), {
+      name: user.displayName,
+      photo: user.photoURL,
+      online: true,
+      reputation: 0
+    }, { merge:true });
+
+    currentUserDiv();
+
   } else {
     currentUser = null;
-    userDiv.innerHTML = "Не авторизован";
   }
 });
 
-// ✉️ Отправка
-document.getElementById("sendBtn").onclick = async () => {
-  try {
-    const text = document.getElementById("message").value.trim();
+// отображение себя
+function currentUserDiv() {
+  document.getElementById("currentUser").innerHTML = `
+    <b>${currentUser.displayName}</b> 
+    <span class="online">● онлайн</span>
+  `;
+}
 
-    if (!currentUser) {
-      alert("Сначала войди!");
-      return;
-    }
+// USERS LIST
+onSnapshot(collection(db, "users"), (snap) => {
+  const usersDiv = document.getElementById("users");
+  usersDiv.innerHTML = "";
 
-    if (!text) return;
+  snap.forEach(u => {
+    if (u.id === currentUser?.uid) return;
 
-    await addDoc(collection(db, "messages"), {
-      text: text,
-      uid: currentUser.uid,
-      name: currentUser.displayName,
-      time: Date.now()
-    });
-
-    document.getElementById("message").value = "";
-
-  } catch (e) {
-    alert("Ошибка: " + e.message);
-  }
-};
-
-// 📡 Чат
-const q = query(collection(db, "messages"), orderBy("time"));
-
-onSnapshot(q, (snapshot) => {
-  const chat = document.getElementById("chat");
-  chat.innerHTML = "";
-
-  snapshot.forEach(doc => {
-    const msg = doc.data();
+    const data = u.data();
 
     const div = document.createElement("div");
-    const isMe = msg.uid === currentUser?.uid;
-
-    div.className = "msg " + (isMe ? "me" : "other");
+    div.className = "user-item";
 
     div.innerHTML = `
-      <div style="font-size:12px;opacity:0.7;">
-        ${isMe ? "Вы" : msg.name}
+      <img src="${data.photo}" width="30" style="border-radius:50%">
+      <div>
+        <div>${data.name}</div>
+        <small class="${data.online ? 'online':'offline'}">
+          ${data.online ? 'онлайн':'оффлайн'}
+        </small><br>
+        ⭐ ${data.reputation || 0}
       </div>
-      <div>${msg.text}</div>
     `;
 
-    chat.appendChild(div);
+    div.onclick = () => openChat(u.id, data.name);
+
+    usersDiv.appendChild(div);
+  });
+});
+
+// OPEN CHAT
+function openChat(uid, name) {
+  currentChat = uid;
+  document.getElementById("chatWith").innerText = "Чат с: " + name;
+
+  const chatRef = collection(db, "messages");
+
+  onSnapshot(query(chatRef, orderBy("time")), (snap) => {
+    const chat = document.getElementById("chat");
+    chat.innerHTML = "";
+
+    snap.forEach(d => {
+      const m = d.data();
+
+      if (
+        (m.from === currentUser.uid && m.to === currentChat) ||
+        (m.from === currentChat && m.to === currentUser.uid)
+      ) {
+        const div = document.createElement("div");
+        const isMe = m.from === currentUser.uid;
+
+        div.className = "msg " + (isMe ? "me" : "other");
+
+        div.innerHTML = `
+          <div>${m.text}</div>
+          <div class="reactions">
+            👍 ${m.like||0}
+            👎 ${m.dislike||0}
+            🔥 ${m.fire||0}
+            💰 ${m.money||0}
+            🚩 ${m.flag||0}
+          </div>
+          <div>
+            <span onclick="react('${d.id}','like')">👍</span>
+            <span onclick="react('${d.id}','dislike')">👎</span>
+            <span onclick="react('${d.id}','fire')">🔥</span>
+            <span onclick="react('${d.id}','money')">💰</span>
+            <span onclick="react('${d.id}','flag')">🚩</span>
+          </div>
+        `;
+
+        chat.appendChild(div);
+      }
+    });
+  });
+}
+
+// SEND
+sendBtn.onclick = async () => {
+  const text = message.value.trim();
+  if (!text || !currentChat) return;
+
+  await addDoc(collection(db, "messages"), {
+    text,
+    from: currentUser.uid,
+    to: currentChat,
+    time: Date.now(),
+    like:0, dislike:0, fire:0, money:0, flag:0
   });
 
-  chat.scrollTop = chat.scrollHeight;
-});
+  message.value = "";
+};
+
+// REACTIONS
+window.react = async (id, type) => {
+  const ref = doc(db, "messages", id);
+  await updateDoc(ref, {
+    [type]: increment(1)
+  });
+
+  // репутация автору
+  const msgDoc = await getDoc(ref);
+  const msg = msgDoc.data();
+
+  const userRef = doc(db, "users", msg.from);
+
+  let value = 0;
+  if (type==="like") value=1;
+  if (type==="dislike") value=-1;
+  if (type==="fire") value=2;
+  if (type==="money") value=3;
+  if (type==="flag") value=-3;
+
+  await updateDoc(userRef, {
+    reputation: increment(value)
+  });
+};
+
 </script>
 
 </body>
