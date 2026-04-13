@@ -97,6 +97,33 @@ button {
   border-radius:8px;
   cursor:pointer;
 }
+  .dark body {
+  background:#121212;
+}
+
+.dark .users,
+.dark .chat-box {
+  background:#1e1e1e;
+  color:white;
+}
+
+.dark .chat {
+  background:#2a2a2a;
+}
+
+.dark input {
+  background:#333;
+  color:white;
+  border:1px solid #555;
+}
+
+.dark .other {
+  background:#444;
+}
+
+.dark .user-item:hover {
+  background:#333;
+}
 
 .login { background:#4285F4; color:white; }
 .send { background:#28a745; color:white; }
@@ -115,6 +142,7 @@ button {
   <div class="top">
     <button class="login" id="loginBtn">Войти</button>
     <button id="logoutBtn">Выйти</button>
+    <button id="themeBtn">🌙</button>
   </div>
 
   <div id="currentUser"></div>
@@ -312,7 +340,26 @@ window.react = async (id, type) => {
     reputation: increment(value)
   });
 };
+const themeBtn = document.getElementById("themeBtn");
 
+// загрузка темы
+if (localStorage.getItem("theme") === "dark") {
+  document.documentElement.classList.add("dark");
+  themeBtn.textContent = "☀️";
+}
+
+// переключение
+themeBtn.onclick = () => {
+  document.documentElement.classList.toggle("dark");
+
+  if (document.documentElement.classList.contains("dark")) {
+    localStorage.setItem("theme", "dark");
+    themeBtn.textContent = "☀️";
+  } else {
+    localStorage.setItem("theme", "light");
+    themeBtn.textContent = "🌙";
+  }
+};
 </script>
 
 </body>
